@@ -94,6 +94,33 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="If pandas+openpyxl are installed, export the first sheet of each .xlsx to CSV.",
     )
     parser.add_argument(
+        "--build-modeling-dataset",
+        action="store_true",
+        help="Build a modeling-ready dataset from Excel inputs (requires pandas+openpyxl).",
+    )
+    parser.add_argument(
+        "--dataset-stem",
+        default="modeling_dataset",
+        help="Output dataset name stem under outputs/datasets (default: modeling_dataset).",
+    )
+    parser.add_argument(
+        "--horizon-days",
+        type=int,
+        default=1,
+        help="Label horizon in days for yield forecasting (default: 1).",
+    )
+    parser.add_argument(
+        "--val-ratio",
+        type=float,
+        default=0.2,
+        help="Validation ratio for time-based split (default: 0.2).",
+    )
+    parser.add_argument(
+        "--no-split",
+        action="store_true",
+        help="Do not write train/val split files; only write the full dataset.",
+    )
+    parser.add_argument(
         "--max-rows",
         type=int,
         default=2000,
@@ -142,6 +169,34 @@ def main(argv: list[str]) -> int:
                 logging.error("%s: %s", xlsx, err)
                 return 4
             logging.info("Exported: %s", out_csv)
+
+    if args.build_modeling_dataset:
+        try:
+            from modeling_dataset import build_modeling_dataset, write_dataset_artifacts
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
+                exc,
+            )
+            return 5
+
+        try:
+            df = build_modeling_dataset(data_dir=data_dir, horizon_days=int(args.horizon_days))
+        except Exception as exc:
+            logging.error("Failed to build modeling dataset: %s", exc)
+            return 6
+
+        artifacts = write_dataset_artifacts(
+            df=df,
+            out_dir=output_dir / "datasets",
+            dataset_stem=str(args.dataset_stem),
+            val_ratio=float(args.val_ratio),
+            do_split=not bool(args.no_split),
+            horizon_days=int(args.horizon_days),
+        )
+        logging.info("Wrote dataset: %s", artifacts.full_csv)
+        if artifacts.train_csv and artifacts.val_csv:
+            logging.info("Wrote split: %s (train) / %s (val)", artifacts.train_csv, artifacts.val_csv)
 
     return 0
 
