@@ -94,6 +94,36 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="If pandas+openpyxl are installed, export the first sheet of each .xlsx to CSV.",
     )
     parser.add_argument(
+        "--export-target-table",
+        action="store_true",
+        help="Export target table (date,yield_10y) to outputs/targets (requires pandas+openpyxl).",
+    )
+    parser.add_argument(
+        "--export-liquidity-tables",
+        action="store_true",
+        help="Export liquidity_features.csv and direct_policy_factors.csv from 资金与流动性.xlsx.",
+    )
+    parser.add_argument(
+        "--export-demand-table",
+        action="store_true",
+        help="Export demand-side net-buy tables (long + wide) from 现券成交分机构统计*.xlsx.",
+    )
+    parser.add_argument(
+        "--export-direct-factors",
+        action="store_true",
+        help="Export direct_factors.csv (LPR + OMO + net financing proxy; daily + forward fill).",
+    )
+    parser.add_argument(
+        "--export-macro-table",
+        action="store_true",
+        help="Export macro_features.csv (day+week aligned to daily; forward fill).",
+    )
+    parser.add_argument(
+        "--export-master-dataset",
+        action="store_true",
+        help="Export processed/master_dataset.csv by left-joining target + liquidity + demand + direct + macro.",
+    )
+    parser.add_argument(
         "--build-modeling-dataset",
         action="store_true",
         help="Build a modeling-ready dataset from Excel inputs (requires pandas+openpyxl).",
@@ -197,6 +227,125 @@ def main(argv: list[str]) -> int:
         logging.info("Wrote dataset: %s", artifacts.full_csv)
         if artifacts.train_csv and artifacts.val_csv:
             logging.info("Wrote split: %s (train) / %s (val)", artifacts.train_csv, artifacts.val_csv)
+
+    if args.export_target_table:
+        try:
+            from modeling_dataset import read_target_yield_10y
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
+                exc,
+            )
+            return 7
+
+        try:
+            target = read_target_yield_10y(data_dir=data_dir)
+        except Exception as exc:
+            logging.error("Failed to export target table: %s", exc)
+            return 8
+
+        out_csv = output_dir / "targets" / "yield_10y.csv"
+        out_csv.parent.mkdir(parents=True, exist_ok=True)
+        target.to_csv(out_csv, index=False, encoding="utf-8-sig")
+        logging.info("Wrote target table: %s", out_csv)
+
+    if args.export_liquidity_tables:
+        try:
+            from modeling_dataset import export_funding_tables
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
+                exc,
+            )
+            return 9
+
+        try:
+            artifacts = export_funding_tables(data_dir=data_dir, out_dir=output_dir)
+        except Exception as exc:
+            logging.error("Failed to export liquidity tables: %s", exc)
+            return 10
+
+        logging.info("Wrote liquidity features: %s", artifacts.liquidity_csv)
+        logging.info("Wrote policy factors: %s", artifacts.policy_csv)
+        logging.info("Wrote split report: %s", artifacts.report_json)
+
+    if args.export_demand_table:
+        try:
+            from modeling_dataset import export_demand_tables
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
+                exc,
+            )
+            return 11
+
+        try:
+            artifacts = export_demand_tables(data_dir=data_dir, out_dir=output_dir)
+        except Exception as exc:
+            logging.error("Failed to export demand tables: %s", exc)
+            return 12
+
+        logging.info("Wrote demand wide: %s", artifacts.wide_csv)
+        logging.info("Wrote demand long: %s", artifacts.long_csv)
+        logging.info("Wrote category mapping: %s", artifacts.mapping_csv)
+        logging.info("Wrote demand report: %s", artifacts.report_json)
+
+    if args.export_direct_factors:
+        try:
+            from modeling_dataset import export_direct_factors
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
+                exc,
+            )
+            return 13
+
+        try:
+            artifacts = export_direct_factors(data_dir=data_dir, out_dir=output_dir)
+        except Exception as exc:
+            logging.error("Failed to export direct factors: %s", exc)
+            return 14
+
+        logging.info("Wrote direct factors: %s", artifacts.csv)
+        logging.info("Wrote direct factors report: %s", artifacts.report_json)
+
+    if args.export_macro_table:
+        try:
+            from modeling_dataset import export_macro_features
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
+                exc,
+            )
+            return 15
+
+        try:
+            artifacts = export_macro_features(data_dir=data_dir, out_dir=output_dir)
+        except Exception as exc:
+            logging.error("Failed to export macro table: %s", exc)
+            return 16
+
+        logging.info("Wrote macro features: %s", artifacts.csv)
+        logging.info("Wrote macro report: %s", artifacts.report_json)
+
+    if args.export_master_dataset:
+        try:
+            from modeling_dataset import export_master_dataset
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
+                exc,
+            )
+            return 17
+
+        try:
+            artifacts = export_master_dataset(data_dir=data_dir, out_dir=output_dir)
+        except Exception as exc:
+            logging.error("Failed to export master dataset: %s", exc)
+            return 18
+
+        logging.info("Wrote master dataset: %s", artifacts.csv)
+        logging.info("Wrote master report: %s", artifacts.report_json)
 
     return 0
 

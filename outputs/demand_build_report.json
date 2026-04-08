@@ -1,0 +1,24 @@
+{
+  "mapping_source": "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20230401 - 20230630.xlsx",
+  "used_detailed_files": [
+    "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20240101 - 20240331.xlsx",
+    "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20240401 - 20240630.xlsx",
+    "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20240701 - 20240930.xlsx",
+    "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20241001 - 20241231.xlsx",
+    "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20250101 - 20250331.xlsx",
+    "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20250401 - 20250630.xlsx",
+    "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20250701 - 20250813.xlsx"
+  ],
+  "used_category_fallback_file": "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20230101 - 20230331.xlsx",
+  "rows_long": 5256,
+  "rows_wide": 652,
+  "categories": [
+    "银行",
+    "基金",
+    "保险",
+    "券商",
+    "理财子",
+    "其他"
+  ],
+  "note": "Category mapping uses mapping file + heuristics; refine as needed."
+}

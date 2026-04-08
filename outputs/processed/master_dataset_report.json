@@ -1,0 +1,38 @@
+{
+  "rows": 1249,
+  "cols": 58,
+  "null_counts_top": {
+    "gc001": 35,
+    "gc007": 35,
+    "spread_gc007_r007": 35,
+    "lpr_1y": 4,
+    "lpr_5y": 4,
+    "r007": 1,
+    "spread_fr007_r007": 1,
+    "spread_r007_dr007": 1,
+    "yield_10y": 0,
+    "date": 0,
+    "fr007": 0,
+    "dr001": 0,
+    "dr007": 0,
+    "r001": 0,
+    "保险": 0,
+    "券商": 0,
+    "银行": 0,
+    "基金": 0,
+    "其他": 0,
+    "理财子": 0
+  },
+  "inputs": {
+    "target": "read_target_yield_10y()",
+    "liquidity_features": "/workspaces/Bond-Yield-Prediction/outputs/liquidity_features.csv",
+    "demand_wide": "/workspaces/Bond-Yield-Prediction/outputs/demand_wide.csv",
+    "direct_factors": "/workspaces/Bond-Yield-Prediction/outputs/direct_factors.csv",
+    "macro_features": "/workspaces/Bond-Yield-Prediction/outputs/macro_features.csv"
+  },
+  "notes": [
+    "Base date frame is the target table dates.",
+    "Demand/OMO/financing flow-like columns fill missing with 0.",
+    "Other columns are forward-filled for continuity."
+  ]
+}
