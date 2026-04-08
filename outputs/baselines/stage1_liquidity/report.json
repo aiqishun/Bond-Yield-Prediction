@@ -1,0 +1,182 @@
+{
+  "dataset": "stage1_liquidity",
+  "train_csv": "/workspaces/Bond-Yield-Prediction/outputs/stage1/liquidity_component_dataset_train.csv",
+  "val_csv": "/workspaces/Bond-Yield-Prediction/outputs/stage1/liquidity_component_dataset_val.csv",
+  "n_train": 983,
+  "n_val": 246,
+  "n_features": 50,
+  "n_labels": 10,
+  "labels": [
+    "label__liquidity__dr001__t+20",
+    "label__liquidity__dr007__t+20",
+    "label__liquidity__r001__t+20",
+    "label__liquidity__r007__t+20",
+    "label__liquidity__fr007__t+20",
+    "label__liquidity__gc001__t+20",
+    "label__liquidity__gc007__t+20",
+    "label__liquidity__spread_r007_dr007__t+20",
+    "label__liquidity__spread_gc007_r007__t+20",
+    "label__liquidity__spread_fr007_r007__t+20"
+  ],
+  "models": {
+    "elasticnet": {
+      "avg_metrics": {
+        "mae": 0.19610251579388654,
+        "rmse": 0.263961478879643,
+        "r2": -0.18567042395964886
+      },
+      "per_label": {
+        "label__liquidity__dr001__t+20": {
+          "metrics": {
+            "mae": 0.14558429514651636,
+            "rmse": 0.17436229363883718,
+            "r2": 0.15412667396427449
+          }
+        },
+        "label__liquidity__dr007__t+20": {
+          "metrics": {
+            "mae": 0.13285727970793437,
+            "rmse": 0.16754999825047762,
+            "r2": 0.23713445247285136
+          }
+        },
+        "label__liquidity__r001__t+20": {
+          "metrics": {
+            "mae": 0.2064664481923896,
+            "rmse": 0.2911491680629542,
+            "r2": -0.05574914888514848
+          }
+        },
+        "label__liquidity__r007__t+20": {
+          "metrics": {
+            "mae": 0.2761382095871728,
+            "rmse": 0.357126715694602,
+            "r2": -0.3997542600177282
+          }
+        },
+        "label__liquidity__fr007__t+20": {
+          "metrics": {
+            "mae": 0.24263837297069385,
+            "rmse": 0.3042654563376222,
+            "r2": -0.4684194225590226
+          }
+        },
+        "label__liquidity__gc001__t+20": {
+          "metrics": {
+            "mae": 0.30820859179991433,
+            "rmse": 0.42654789910174934,
+            "r2": -0.15780869390251628
+          }
+        },
+        "label__liquidity__gc007__t+20": {
+          "metrics": {
+            "mae": 0.2475644753733532,
+            "rmse": 0.30307138718358045,
+            "r2": -0.12742994852133593
+          }
+        },
+        "label__liquidity__spread_r007_dr007__t+20": {
+          "metrics": {
+            "mae": 0.1735235914799553,
+            "rmse": 0.23241093980180505,
+            "r2": -0.7960798834670746
+          }
+        },
+        "label__liquidity__spread_gc007_r007__t+20": {
+          "metrics": {
+            "mae": 0.17040629226483345,
+            "rmse": 0.2801210044693733,
+            "r2": -0.2896163831643017
+          }
+        },
+        "label__liquidity__spread_fr007_r007__t+20": {
+          "metrics": {
+            "mae": 0.057637601416102,
+            "rmse": 0.10300992625542832,
+            "r2": 0.046892374483513244
+          }
+        }
+      }
+    },
+    "xgboost": {
+      "avg_metrics": {
+        "mae": 0.2785721749455895,
+        "rmse": 0.3416894123932575,
+        "r2": -0.8911178925920691
+      },
+      "per_label": {
+        "label__liquidity__dr001__t+20": {
+          "metrics": {
+            "mae": 0.17351743041015252,
+            "rmse": 0.2073894863822377,
+            "r2": -0.19666793878313693
+          }
+        },
+        "label__liquidity__dr007__t+20": {
+          "metrics": {
+            "mae": 0.17645420623872338,
+            "rmse": 0.20322939899406203,
+            "r2": -0.12236008208327331
+          }
+        },
+        "label__liquidity__r001__t+20": {
+          "metrics": {
+            "mae": 0.27861853385398067,
+            "rmse": 0.3522203555281252,
+            "r2": -0.5451069116808693
+          }
+        },
+        "label__liquidity__r007__t+20": {
+          "metrics": {
+            "mae": 0.33744030077166676,
+            "rmse": 0.4080075423519405,
+            "r2": -0.8270208399600221
+          }
+        },
+        "label__liquidity__fr007__t+20": {
+          "metrics": {
+            "mae": 0.2889288059909169,
+            "rmse": 0.34430639219493453,
+            "r2": -0.8803339751666686
+          }
+        },
+        "label__liquidity__gc001__t+20": {
+          "metrics": {
+            "mae": 0.6186485116850069,
+            "rmse": 0.7233494606706413,
+            "r2": -2.329641806329696
+          }
+        },
+        "label__liquidity__gc007__t+20": {
+          "metrics": {
+            "mae": 0.45629515707977425,
+            "rmse": 0.5314752302748249,
+            "r2": -2.4670950744862123
+          }
+        },
+        "label__liquidity__spread_r007_dr007__t+20": {
+          "metrics": {
+            "mae": 0.1681968932675637,
+            "rmse": 0.22340697923776978,
+            "r2": -0.6596097886556016
+          }
+        },
+        "label__liquidity__spread_gc007_r007__t+20": {
+          "metrics": {
+            "mae": 0.2034531899106,
+            "rmse": 0.29730460866636005,
+            "r2": -0.45268842032964596
+          }
+        },
+        "label__liquidity__spread_fr007_r007__t+20": {
+          "metrics": {
+            "mae": 0.08416872024751036,
+            "rmse": 0.12620466963167895,
+            "r2": -0.4306540884455643
+          }
+        }
+      }
+    }
+  },
+  "generated_at_utc": "2026-04-08T09:16:03.770601+00:00"
+}

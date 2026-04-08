@@ -1,0 +1,122 @@
+{
+  "dataset": "stage1_demand",
+  "train_csv": "/workspaces/Bond-Yield-Prediction/outputs/stage1/demand_component_dataset_train.csv",
+  "val_csv": "/workspaces/Bond-Yield-Prediction/outputs/stage1/demand_component_dataset_val.csv",
+  "n_train": 983,
+  "n_val": 246,
+  "n_features": 46,
+  "n_labels": 6,
+  "labels": [
+    "label__demand__银行__t+20",
+    "label__demand__基金__t+20",
+    "label__demand__保险__t+20",
+    "label__demand__券商__t+20",
+    "label__demand__理财子__t+20",
+    "label__demand__其他__t+20"
+  ],
+  "models": {
+    "elasticnet": {
+      "avg_metrics": {
+        "mae": 73.59330812676485,
+        "rmse": 94.09719578767147,
+        "r2": -0.4210822441243134
+      },
+      "per_label": {
+        "label__demand__银行__t+20": {
+          "metrics": {
+            "mae": 189.4609540355583,
+            "rmse": 241.52154375558527,
+            "r2": -0.35127214410925256
+          }
+        },
+        "label__demand__基金__t+20": {
+          "metrics": {
+            "mae": 111.01013454891714,
+            "rmse": 145.36960362870278,
+            "r2": -0.1991658657880675
+          }
+        },
+        "label__demand__保险__t+20": {
+          "metrics": {
+            "mae": 14.093227664748005,
+            "rmse": 18.742077287778265,
+            "r2": -0.26614102633981895
+          }
+        },
+        "label__demand__券商__t+20": {
+          "metrics": {
+            "mae": 63.593977597948715,
+            "rmse": 80.09162760597665,
+            "r2": -0.0007130947532785203
+          }
+        },
+        "label__demand__理财子__t+20": {
+          "metrics": {
+            "mae": 1.9123720491283827,
+            "rmse": 2.5793231616874746,
+            "r2": -1.1980755063796824
+          }
+        },
+        "label__demand__其他__t+20": {
+          "metrics": {
+            "mae": 61.48918286428861,
+            "rmse": 76.27899928629834,
+            "r2": -0.5111258273757802
+          }
+        }
+      }
+    },
+    "xgboost": {
+      "avg_metrics": {
+        "mae": 72.97554606299039,
+        "rmse": 93.620168623768,
+        "r2": -1.0960586287674612
+      },
+      "per_label": {
+        "label__demand__银行__t+20": {
+          "metrics": {
+            "mae": 184.32344862711136,
+            "rmse": 234.8436821275568,
+            "r2": -0.2775821470928155
+          }
+        },
+        "label__demand__基金__t+20": {
+          "metrics": {
+            "mae": 111.96513291188373,
+            "rmse": 143.8746377811426,
+            "r2": -0.17462849430645688
+          }
+        },
+        "label__demand__保险__t+20": {
+          "metrics": {
+            "mae": 14.131812094629295,
+            "rmse": 18.60663396228671,
+            "r2": -0.24790711405057775
+          }
+        },
+        "label__demand__券商__t+20": {
+          "metrics": {
+            "mae": 68.43002892031416,
+            "rmse": 89.1609116897455,
+            "r2": -0.24017891998052288
+          }
+        },
+        "label__demand__理财子__t+20": {
+          "metrics": {
+            "mae": 3.39913600434799,
+            "rmse": 4.377827039615547,
+            "r2": -5.332107649540133
+          }
+        },
+        "label__demand__其他__t+20": {
+          "metrics": {
+            "mae": 55.60371781965581,
+            "rmse": 70.8573191422608,
+            "r2": -0.30394744763426074
+          }
+        }
+      }
+    }
+  },
+  "generated_at_utc": "2026-04-08T09:16:16.956161+00:00"
+}

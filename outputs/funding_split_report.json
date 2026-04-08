@@ -31,5 +31,5 @@
     "mlf",
     "reverse_repo"
   ],
-  "note": "Split uses heuristics + explicit mappings; adjust mappings when you confirm true '货币操作类' fields."
+  "note": "Source roles are fixed via get_source_catalog(); adjust mappings there if inputs change."
 }

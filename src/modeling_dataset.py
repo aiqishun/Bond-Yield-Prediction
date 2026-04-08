@@ -48,6 +48,65 @@ class MasterArtifacts:
     report_json: Path
 
 
+@dataclass(frozen=True)
+class ComponentDatasetsArtifacts:
+    liquidity_full: Path
+    liquidity_train: Path | None
+    liquidity_val: Path | None
+    demand_full: Path
+    demand_train: Path | None
+    demand_val: Path | None
+    report_json: Path
+    split_date: str | None
+
+
+@dataclass(frozen=True)
+class SourceCatalog:
+    # Target yield (y)
+    target_primary: Path
+    target_fallback: Path
+
+    # Cleaned / composite tables with fixed roles
+    funding_indicators: Path  # DR/R/GC/OMO (cleaned composite)
+    institution_category_mapping: Path  # static mapping table
+    demand_by_category_fallback: Path  # category-level net-buy series (cleaned composite)
+
+    # Low-frequency direct factors
+    lpr_table: Path  # contains year_1_lpr/year_5_lpr
+
+    # Macro tables
+    macro_day: Path
+    macro_day_fallback: Path
+    macro_week: Path
+
+
+def get_source_catalog(data_dir: Path) -> SourceCatalog:
+    """
+    Fix each source file's "primary role" to avoid one file serving multiple purposes.
+    Exceptions are explicitly marked as cleaned composite / mapping tables.
+    """
+    return SourceCatalog(
+        target_primary=data_dir / "10年期国债收益率.xlsx",
+        target_fallback=data_dir / "资金与流动性.xlsx",
+        # This file is a cleaned composite table (rates + OMO); treat it as funding-only.
+        funding_indicators=data_dir / "现券成交分机构统计20230701 - 20230930.xlsx",
+        # This file is a static mapping table (institution -> category).
+        institution_category_mapping=data_dir / "现券成交分机构统计20230401 - 20230630.xlsx",
+        # This file is a cleaned composite time series at category level (covers long range).
+        demand_by_category_fallback=data_dir / "现券成交分机构统计20230101 - 20230331.xlsx",
+        # Despite its filename, this file contains LPR series in the current dataset.
+        lpr_table=data_dir / "债券发行与到期20250818国债及政金债.xlsx",
+        macro_day=data_dir / "高频宏观指标_day.xlsx",
+        macro_day_fallback=data_dir / "高频宏观指标.xlsx",
+        macro_week=data_dir / "高频宏观指标_week.xlsx",
+    )
+
+
+@dataclass(frozen=True)
+class FeatureRegistryArtifacts:
+    csv: Path
+
+
 def _require_pandas() -> tuple[object, object]:
     try:
         import pandas as pd  # type: ignore
@@ -98,9 +157,10 @@ def _pick_yield_col(columns: list[str]) -> str | None:
 
 def read_target_yield_10y(data_dir: Path):
     pd, _ = _require_pandas()
+    sources = get_source_catalog(data_dir)
 
     # 1) Preferred: 10年期国债收益率.xlsx
-    preferred = data_dir / "10年期国债收益率.xlsx"
+    preferred = sources.target_primary
     if preferred.exists():
         df = pd.read_excel(preferred, sheet_name=0)
         if not df.empty:
@@ -115,7 +175,7 @@ def read_target_yield_10y(data_dir: Path):
             )
 
     # 2) Fallback: 资金与流动性.xlsx
-    fallback = data_dir / "资金与流动性.xlsx"
+    fallback = sources.target_fallback
     if not fallback.exists():
         raise FileNotFoundError(f"Missing target source files: {preferred} and {fallback}")
 
@@ -150,49 +210,25 @@ def _sanitize_col_name(name: str) -> str:
 
 def export_funding_tables(data_dir: Path, out_dir: Path) -> FundingSplitArtifacts:
     """
-    Split `资金与流动性.xlsx` into:
+    Split the funding indicator source into:
     - liquidity_features.csv: other liquidity indicators (DR/R/CD/spreads/etc.)
     - direct_policy_factors.csv: policy operations (OMO/逆回购/MLF/到期回笼/etc.)
 
-    If the workbook lacks expected columns, we still export the best-effort split
+    If the source lacks expected columns, we still export the best-effort split
     and write a report describing what's missing.
     """
     pd, _ = _require_pandas()
+    sources = get_source_catalog(data_dir)
 
-    def _find_funding_indicator_file() -> Path | None:
-        best: tuple[int, Path] | None = None
-        for p in sorted(data_dir.glob("*.xlsx")):
-            try:
-                xl = pd.ExcelFile(p)
-            except Exception:
-                continue
-            # Look across sheets; pick any that has key columns.
-            for s in xl.sheet_names:
-                try:
-                    hdr = pd.read_excel(p, sheet_name=s, nrows=0)
-                except Exception:
-                    continue
-                cols = {str(c) for c in hdr.columns}
-                score = 0
-                for need in ["DR001", "DR007", "R001", "R007"]:
-                    if need in cols:
-                        score += 2
-                for need in ["中国:公开市场操作:货币净投放", "中国:公开市场操作:货币投放", "中国:公开市场操作:货币回笼"]:
-                    if need in cols:
-                        score += 1
-                if score > 0 and (best is None or score > best[0]):
-                    best = (score, p)
-        return best[1] if best else None
-
-    # Preferred funding indicator source: contains DR/R and OMO columns.
-    funding_indicator_path = _find_funding_indicator_file()
+    # Fixed-role funding indicator source (cleaned composite table).
+    funding_indicator_path = sources.funding_indicators if sources.funding_indicators.exists() else None
 
     # Base dates: take from target yield series if available; this is the index we want for modeling.
     base_dates = read_target_yield_10y(data_dir)[["date"]].copy()
 
     liquidity = base_dates.copy()
     policy = base_dates.copy()
-    sources: list[str] = []
+    source_files: list[str] = []
 
     if funding_indicator_path is not None:
         try:
@@ -201,7 +237,7 @@ def export_funding_tables(data_dir: Path, out_dir: Path) -> FundingSplitArtifact
             logging.warning("Failed reading funding indicator file %s: %s", funding_indicator_path, exc)
             df = None
         if df is not None and not df.empty:
-            sources.append(str(funding_indicator_path))
+            source_files.append(str(funding_indicator_path))
             # Choose a date column; prefer R_日期 then 货币日期 then any *_日期.
             date_candidates = [c for c in df.columns if str(c) in {"R_日期", "货币日期"}] + [
                 c for c in df.columns if str(c).endswith("日期")
@@ -250,7 +286,7 @@ def export_funding_tables(data_dir: Path, out_dir: Path) -> FundingSplitArtifact
             policy = base_dates.merge(pol, on="date", how="left")
 
     # Add LPR series (monthly) if available.
-    lpr_path = data_dir / "债券发行与到期20250818国债及政金债.xlsx"
+    lpr_path = sources.lpr_table
     if lpr_path.exists():
         try:
             lpr = pd.read_excel(lpr_path, sheet_name=0)
@@ -258,7 +294,7 @@ def export_funding_tables(data_dir: Path, out_dir: Path) -> FundingSplitArtifact
             logging.warning("Failed reading LPR file %s: %s", lpr_path, exc)
             lpr = None
         if lpr is not None and not lpr.empty and "order_date_dt" in lpr.columns:
-            sources.append(str(lpr_path))
+            source_files.append(str(lpr_path))
             tmp = lpr.copy()
             tmp["date"] = _to_date(pd, tmp["order_date_dt"])
             keep = ["date"]
@@ -293,13 +329,13 @@ def export_funding_tables(data_dir: Path, out_dir: Path) -> FundingSplitArtifact
 
     report = {
         "base_dates_source": "read_target_yield_10y()",
-        "source_files_used": sources,
+        "source_files_used": source_files,
         "rows": int(base_dates.shape[0]),
         "liquidity_columns": [c for c in liquidity.columns],
         "policy_columns": [c for c in policy.columns],
         "missing_expected_liquidity": missing_liquidity,
         "missing_expected_policy": missing_policy,
-        "note": "Split uses heuristics + explicit mappings; adjust mappings when you confirm true '货币操作类' fields.",
+        "note": "Source roles are fixed via get_source_catalog(); adjust mappings there if inputs change.",
     }
     report_json.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -317,38 +353,15 @@ def export_direct_factors(data_dir: Path, out_dir: Path) -> DirectFactorsArtifac
     - a proxy net financing series from 高频宏观指标_day (daily forward fill)
     """
     pd, _ = _require_pandas()
+    catalog = get_source_catalog(data_dir)
 
     base_dates = read_target_yield_10y(data_dir)[["date"]].copy().sort_values("date").reset_index(drop=True)
     direct = base_dates.copy()
-    sources: list[str] = []
+    source_files: list[str] = []
     missing: set[str] = set()
 
-    def find_funding_indicator_file() -> Path | None:
-        best: tuple[int, Path] | None = None
-        for p in sorted(data_dir.glob("*.xlsx")):
-            try:
-                xl = pd.ExcelFile(p)
-            except Exception:
-                continue
-            for s in xl.sheet_names:
-                try:
-                    hdr = pd.read_excel(p, sheet_name=s, nrows=0)
-                except Exception:
-                    continue
-                cols = {str(c) for c in hdr.columns}
-                score = 0
-                for need in ["DR001", "DR007", "R001", "R007"]:
-                    if need in cols:
-                        score += 2
-                for need in ["中国:公开市场操作:货币净投放", "中国:公开市场操作:货币投放", "中国:公开市场操作:货币回笼"]:
-                    if need in cols:
-                        score += 1
-                if score > 0 and (best is None or score > best[0]):
-                    best = (score, p)
-        return best[1] if best else None
-
     # Monetary operations (OMO).
-    funding_indicator_path = find_funding_indicator_file()
+    funding_indicator_path = catalog.funding_indicators if catalog.funding_indicators.exists() else None
     if funding_indicator_path is not None:
         try:
             df = pd.read_excel(funding_indicator_path, sheet_name=0)
@@ -356,7 +369,7 @@ def export_direct_factors(data_dir: Path, out_dir: Path) -> DirectFactorsArtifac
             logging.warning("Failed reading OMO source %s: %s", funding_indicator_path, exc)
             df = None
         if df is not None and not df.empty:
-            sources.append(str(funding_indicator_path))
+            source_files.append(str(funding_indicator_path))
             date_candidates = [c for c in df.columns if str(c) in {"货币日期", "R_日期"}] + [
                 c for c in df.columns if str(c).endswith("日期")
             ]
@@ -383,7 +396,7 @@ def export_direct_factors(data_dir: Path, out_dir: Path) -> DirectFactorsArtifac
         missing.update({"omo_net", "omo_inject", "omo_withdraw"})
 
     # LPR (monthly) -> daily forward fill.
-    lpr_path = data_dir / "债券发行与到期20250818国债及政金债.xlsx"
+    lpr_path = catalog.lpr_table
     if lpr_path.exists():
         try:
             lpr = pd.read_excel(lpr_path, sheet_name=0)
@@ -391,7 +404,7 @@ def export_direct_factors(data_dir: Path, out_dir: Path) -> DirectFactorsArtifac
             logging.warning("Failed reading LPR file %s: %s", lpr_path, exc)
             lpr = None
         if lpr is not None and not lpr.empty and "order_date_dt" in lpr.columns:
-            sources.append(str(lpr_path))
+            source_files.append(str(lpr_path))
             tmp = lpr.copy()
             tmp["date"] = _to_date(pd, tmp["order_date_dt"])
             keep = ["date"]
@@ -444,7 +457,7 @@ def export_direct_factors(data_dir: Path, out_dir: Path) -> DirectFactorsArtifac
             aligned = base_dates.merge(tmp, on="date", how="left").sort_values("date")
             aligned["gov_net_financing"] = aligned["gov_net_financing"].ffill()
             direct = direct.merge(aligned[["date", "gov_net_financing"]], on="date", how="left")
-            sources.append(str(p))
+            source_files.append(str(p))
             gov_found = True
             break
         if gov_found:
@@ -463,7 +476,7 @@ def export_direct_factors(data_dir: Path, out_dir: Path) -> DirectFactorsArtifac
         aligned = base_dates.merge(tmp, on="date", how="left").sort_values("date")
         aligned["net_financing_total"] = aligned["net_financing_total"].ffill()
         direct = direct.merge(aligned[["date", "net_financing_total"]], on="date", how="left")
-        sources.append("data/高频宏观指标_day.xlsx (net financing proxy)")
+        source_files.append("data/高频宏观指标_day.xlsx (net financing proxy)")
     else:
         missing.add("net_financing_total")
 
@@ -477,7 +490,7 @@ def export_direct_factors(data_dir: Path, out_dir: Path) -> DirectFactorsArtifac
     report = {
         "rows": int(direct.shape[0]),
         "columns": [c for c in direct.columns],
-        "source_files_used": sources,
+        "source_files_used": source_files,
         "missing_expected_fields": sorted(missing),
         "note": "Low-frequency series (e.g., LPR) are aligned to daily dates and forward-filled.",
     }
@@ -526,6 +539,371 @@ def export_macro_features(data_dir: Path, out_dir: Path) -> MacroArtifacts:
     }
     out_report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return MacroArtifacts(csv=out_csv, report_json=out_report)
+
+
+def export_component_datasets(
+    data_dir: Path,
+    out_dir: Path,
+    horizon_days: int,
+    val_ratio: float,
+    do_split: bool,
+) -> ComponentDatasetsArtifacts:
+    """
+    Export stage-1 datasets for "component prediction" (分量预测).
+
+    This does NOT train models; it only materializes supervised learning tables:
+    - Liquidity component dataset: predict future liquidity variables (DR/R/GC/spreads) at t+H.
+    - Demand component dataset: predict future category net-buy at t+H.
+
+    Features are aligned to the target date frame and include macro + direct factors.
+    """
+    pd, _ = _require_pandas()
+
+    if horizon_days <= 0:
+        raise ValueError("horizon_days must be >= 1")
+    if not (0.0 < val_ratio < 0.9):
+        raise ValueError("val_ratio must be between 0 and 0.9")
+
+    base_dates = read_target_yield_10y(data_dir)[["date"]].copy().sort_values("date").reset_index(drop=True)
+
+    # Ensure intermediate tables exist and are aligned.
+    funding = export_funding_tables(data_dir=data_dir, out_dir=out_dir)
+    demand = export_demand_tables(data_dir=data_dir, out_dir=out_dir)
+    direct = export_direct_factors(data_dir=data_dir, out_dir=out_dir)
+    macro = export_macro_features(data_dir=data_dir, out_dir=out_dir)
+
+    liquidity = pd.read_csv(funding.liquidity_csv, parse_dates=["date"])
+    demand_wide = pd.read_csv(demand.wide_csv, parse_dates=["date"])
+    direct_factors = pd.read_csv(direct.csv, parse_dates=["date"])
+    macro_features = pd.read_csv(macro.csv, parse_dates=["date"])
+
+    # Shared feature frame.
+    base_feat = base_dates.merge(macro_features, on="date", how="left").merge(direct_factors, on="date", how="left")
+    base_feat = base_feat.sort_values("date").reset_index(drop=True)
+    # Forward fill low-frequency columns in features.
+    feat_cols = [c for c in base_feat.columns if c != "date"]
+    if feat_cols:
+        base_feat[feat_cols] = base_feat[feat_cols].ffill()
+
+    def add_future_labels(df, label_prefix: str, target_cols: list[str]):
+        out = df.copy()
+        for c in target_cols:
+            out[f"label__{label_prefix}__{c}__t+{horizon_days}"] = out[c].shift(-horizon_days)
+        return out
+
+    # Liquidity component dataset.
+    liq_cols = [c for c in liquidity.columns if c != "date"]
+    liq_frame = base_feat.merge(liquidity, on="date", how="left")
+    liq_frame = liq_frame.sort_values("date").reset_index(drop=True)
+    if liq_cols:
+        liq_frame[liq_cols] = liq_frame[liq_cols].ffill()
+    liq_dataset = add_future_labels(liq_frame, "liquidity", liq_cols)
+    label_cols = [c for c in liq_dataset.columns if c.startswith("label__liquidity__")]
+    if label_cols:
+        liq_dataset = liq_dataset.dropna(subset=label_cols, how="all")
+
+    # Demand component dataset.
+    dem_cols = [c for c in demand_wide.columns if c != "date"]
+    dem_frame = base_feat.merge(demand_wide, on="date", how="left")
+    dem_frame = dem_frame.sort_values("date").reset_index(drop=True)
+    if dem_cols:
+        dem_frame[dem_cols] = dem_frame[dem_cols].fillna(0.0)
+    dem_dataset = add_future_labels(dem_frame, "demand", dem_cols)
+    label_cols = [c for c in dem_dataset.columns if c.startswith("label__demand__")]
+    if label_cols:
+        dem_dataset = dem_dataset.dropna(subset=label_cols, how="all")
+
+    def time_split(df):
+        dates = df["date"].dropna().sort_values().unique().tolist()
+        if len(dates) < 10:
+            return df, None, None, None
+        cut = max(1, min(len(dates) - 1, int(len(dates) * (1.0 - val_ratio))))
+        split_date = str(pd.to_datetime(dates[cut]).date())
+        train = df[df["date"] < dates[cut]]
+        val = df[df["date"] >= dates[cut]]
+        return None, train, val, split_date
+
+    stage1_dir = out_dir / "stage1"
+    stage1_dir.mkdir(parents=True, exist_ok=True)
+
+    liq_full = stage1_dir / "liquidity_component_dataset_full.csv"
+    dem_full = stage1_dir / "demand_component_dataset_full.csv"
+    liq_dataset.to_csv(liq_full, index=False, encoding="utf-8-sig")
+    dem_dataset.to_csv(dem_full, index=False, encoding="utf-8-sig")
+
+    split_date = None
+    liq_train = liq_val = dem_train = dem_val = None
+    if do_split:
+        _, train, val, split_date = time_split(liq_dataset)
+        if train is not None and val is not None:
+            liq_train = stage1_dir / "liquidity_component_dataset_train.csv"
+            liq_val = stage1_dir / "liquidity_component_dataset_val.csv"
+            train.to_csv(liq_train, index=False, encoding="utf-8-sig")
+            val.to_csv(liq_val, index=False, encoding="utf-8-sig")
+
+        _, train, val, _ = time_split(dem_dataset)
+        if train is not None and val is not None:
+            dem_train = stage1_dir / "demand_component_dataset_train.csv"
+            dem_val = stage1_dir / "demand_component_dataset_val.csv"
+            train.to_csv(dem_train, index=False, encoding="utf-8-sig")
+            val.to_csv(dem_val, index=False, encoding="utf-8-sig")
+
+    report = {
+        "horizon_days": int(horizon_days),
+        "val_ratio": float(val_ratio),
+        "split_date": split_date,
+        "liquidity_rows": int(liq_dataset.shape[0]),
+        "demand_rows": int(dem_dataset.shape[0]),
+        "liquidity_label_cols": [c for c in liq_dataset.columns if c.startswith("label__liquidity__")],
+        "demand_label_cols": [c for c in dem_dataset.columns if c.startswith("label__demand__")],
+        "notes": [
+            "These datasets are for stage-1 component forecasting only (no training code included).",
+            "Stage-2 final model should consume stage-1 predictions + direct factors.",
+        ],
+    }
+    report_json = stage1_dir / "component_datasets_report.json"
+    report_json.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return ComponentDatasetsArtifacts(
+        liquidity_full=liq_full,
+        liquidity_train=liq_train,
+        liquidity_val=liq_val,
+        demand_full=dem_full,
+        demand_train=dem_train,
+        demand_val=dem_val,
+        report_json=report_json,
+        split_date=split_date,
+    )
+
+
+def export_feature_registry(
+    data_dir: Path,
+    out_dir: Path,
+    horizon_days: int,
+) -> FeatureRegistryArtifacts:
+    """
+    Export a simple "feature registry" so it's clear what each column means across stages.
+    """
+    pd, _ = _require_pandas()
+    catalog = get_source_catalog(data_dir)
+
+    # Ensure upstream artifacts exist (idempotent).
+    target_df = read_target_yield_10y(data_dir)
+    funding = export_funding_tables(data_dir=data_dir, out_dir=out_dir)
+    demand = export_demand_tables(data_dir=data_dir, out_dir=out_dir)
+    direct = export_direct_factors(data_dir=data_dir, out_dir=out_dir)
+    macro = export_macro_features(data_dir=data_dir, out_dir=out_dir)
+    master = export_master_dataset(data_dir=data_dir, out_dir=out_dir)
+    stage1 = export_component_datasets(
+        data_dir=data_dir,
+        out_dir=out_dir,
+        horizon_days=horizon_days,
+        val_ratio=0.2,
+        do_split=True,
+    )
+
+    def _infer_stage2_horizon(cols: list[str]) -> int | None:
+        import re
+
+        hs: set[int] = set()
+        for c in cols:
+            m = re.search(r"label__yield_10y__t\+(\d+)$", str(c))
+            if m:
+                hs.add(int(m.group(1)))
+        return next(iter(hs)) if len(hs) == 1 else None
+
+    # Stage2 columns: prefer existing on-disk dataset if present, so registry matches "现有输出".
+    stage2_used_in = "outputs/datasets/modeling_dataset_full.csv (or in-memory)"
+    stage2_notes = "Stage-2 final forecasting dataset for 10Y yield (features + labels)."
+    stage2_cols: list[str] | None = None
+    stage2_path = (out_dir / "datasets" / "modeling_dataset_full.csv").resolve()
+    inferred_horizon: int | None = None
+    if stage2_path.exists():
+        stage2_cols = list(pd.read_csv(stage2_path, nrows=0).columns)
+        inferred_horizon = _infer_stage2_horizon(stage2_cols)
+        if inferred_horizon is not None and inferred_horizon != horizon_days:
+            logging.warning(
+                "Feature registry horizon_days=%s but existing %s uses label horizon t+%s. "
+                "Using existing file columns for stage2 registry; regenerate with --horizon-days %s to match.",
+                horizon_days,
+                stage2_path,
+                inferred_horizon,
+                horizon_days,
+            )
+            stage2_notes += f" (stage2 label horizon in file: t+{inferred_horizon})"
+        stage2_used_in = str(stage2_path)
+
+    if stage2_cols is None:
+        modeling_df = build_modeling_dataset(data_dir=data_dir, horizon_days=horizon_days)
+        stage2_cols = list(map(str, modeling_df.columns))
+        stage2_used_in = f"in-memory (run --build-modeling-dataset --horizon-days {horizon_days} to materialize)"
+        stage2_notes += f" (inferred horizon: t+{horizon_days})"
+
+    def classify_role(stage: str, feature_name: str) -> str:
+        if stage in {"stage1_liquidity", "stage1_demand"}:
+            if feature_name.startswith("label__"):
+                return "component_target"
+            if feature_name == "date":
+                return "component_feature"
+            if feature_name.startswith("macro_day__") or feature_name.startswith("macro_week__"):
+                return "macro_factor"
+            if feature_name.startswith("omo_") or feature_name.startswith("lpr_") or feature_name in {
+                "gov_net_financing",
+                "net_financing_total",
+            }:
+                return "direct_factor"
+            return "component_feature"
+
+        # stage2_final_10y
+        if feature_name.startswith("label__"):
+            return "target"
+        if feature_name.startswith("feat__yield_10y__lag"):
+            return "lag_feature"
+        if feature_name.startswith("macro_day__") or feature_name.startswith("macro_week__"):
+            return "macro_factor"
+        if feature_name.startswith("trade__"):
+            return "component_feature"
+        if feature_name.startswith("omo_") or feature_name.startswith("lpr_") or feature_name in {
+            "gov_net_financing",
+            "net_financing_total",
+        }:
+            return "direct_factor"
+        return "component_feature"
+
+    def infer_frequency(feature_name: str) -> str:
+        if feature_name.startswith("macro_week__"):
+            return "weekly->daily"
+        if feature_name.startswith("lpr_"):
+            return "monthly->daily"
+        return "daily"
+
+    def infer_fill(stage: str, feature_name: str) -> str:
+        if feature_name == "date":
+            return "none"
+        if feature_name.startswith("label__"):
+            return "none"
+        if stage == "stage1_demand" and feature_name in {"银行", "基金", "保险", "券商", "理财子", "其他"}:
+            return "fillna(0)"
+        if feature_name.startswith("omo_") or feature_name.startswith("lpr_") or feature_name.startswith("macro_"):
+            return "ffill"
+        if feature_name.startswith("trade__"):
+            return "fillna(0)"
+        if feature_name.startswith("feat__"):
+            return "none"
+        # liquidity indicators: keep continuity via ffill
+        if feature_name in {"dr001", "dr007", "r001", "r007", "fr007", "gc001", "gc007"} or feature_name.startswith(
+            "spread_"
+        ):
+            return "ffill"
+        return "ffill"
+
+    def source_for(feature_name: str) -> tuple[str, str]:
+        """
+        Return (source_file, source_table).
+        """
+        if feature_name == "date":
+            return ("generated", "date index (from target date frame)")
+        if feature_name == "yield_10y" or feature_name.startswith("feat__yield_10y"):
+            return (str(catalog.target_fallback), "yield_10y.csv (fallback) / target extract")
+        if feature_name.startswith("macro_day__"):
+            return (str(catalog.macro_day if catalog.macro_day.exists() else catalog.macro_day_fallback), "macro_features.csv")
+        if feature_name.startswith("macro_week__"):
+            return (str(catalog.macro_week), "macro_features.csv")
+        if feature_name.startswith("trade__"):
+            return ("data/现券成交分机构统计2024*~2025*.xlsx", "trade flows aggregate")
+        if feature_name in {"dr001", "dr007", "r001", "r007", "fr007", "gc001", "gc007"} or feature_name.startswith(
+            "spread_"
+        ) or feature_name.startswith("omo_"):
+            return (str(catalog.funding_indicators), "liquidity_features.csv / direct_policy_factors.csv")
+        if feature_name in {"银行", "基金", "保险", "券商", "理财子", "其他"}:
+            return ("data/现券成交分机构统计2024*~2025*.xlsx", "demand_wide.csv")
+        if feature_name.startswith("lpr_"):
+            return (str(catalog.lpr_table), "direct_factors.csv")
+        if feature_name in {"gov_net_financing", "net_financing_total"}:
+            return ("data/高频宏观指标_day.xlsx", "direct_factors.csv")
+        if feature_name.startswith("label__"):
+            return ("generated", "labels")
+        return ("generated", "unknown")
+
+    rows: list[dict[str, object]] = []
+
+    def add_stage(stage: str, columns: list[str], used_in_dataset: str, notes: str) -> None:
+        for c in columns:
+            if c == "date":
+                role = "component_feature"
+            else:
+                role = classify_role(stage, c)
+            source_file, source_table = source_for(c)
+            rows.append(
+                {
+                    "feature_name": c,
+                    "source_file": source_file,
+                    "source_table": source_table,
+                    "role": role,
+                    "stage": stage,
+                    "frequency": infer_frequency(c),
+                    "fill_method": infer_fill(stage, c),
+                    "used_in_dataset": used_in_dataset,
+                    "notes": notes,
+                }
+            )
+
+    # Stage1 liquidity dataset.
+    liq_stage_cols = list(pd.read_csv(stage1.liquidity_full, nrows=0).columns)
+    add_stage(
+        "stage1_liquidity",
+        liq_stage_cols,
+        str(stage1.liquidity_full),
+        "Stage-1 component dataset for liquidity forecasting (分量预测：资金面).",
+    )
+
+    # Stage1 demand dataset.
+    dem_stage_cols = list(pd.read_csv(stage1.demand_full, nrows=0).columns)
+    add_stage(
+        "stage1_demand",
+        dem_stage_cols,
+        str(stage1.demand_full),
+        "Stage-1 component dataset for demand forecasting (分量预测：需求面).",
+    )
+
+    # Stage2 final dataset (modeling dataset columns).
+    add_stage(
+        "stage2_final_10y",
+        stage2_cols,
+        stage2_used_in,
+        stage2_notes + f" (mainline: t+{horizon_days})",
+    )
+
+    # Stage2 legacy/baseline datasets (if present on disk).
+    legacy_paths = sorted((out_dir / "datasets").glob("modeling_dataset_legacy_t+*_full.csv"))
+    for legacy_full in legacy_paths:
+        legacy_full = legacy_full.resolve()
+        legacy_cols = list(pd.read_csv(legacy_full, nrows=0).columns)
+        legacy_h = _infer_stage2_horizon(legacy_cols)
+        legacy_stage = "stage2_final_10y_legacy"
+        if legacy_h is not None:
+            legacy_stage = f"stage2_final_10y_legacy_t+{legacy_h}"
+        legacy_note = "Stage-2 legacy/baseline dataset kept for comparison; not the mainline training target."
+        if legacy_h is not None:
+            legacy_note += f" (label horizon in file: t+{legacy_h})"
+        add_stage(
+            legacy_stage,
+            legacy_cols,
+            str(legacy_full),
+            legacy_note,
+        )
+
+    reg = pd.DataFrame(rows)
+    # De-dup exact repeats (can happen if a column appears twice in a stage).
+    reg = reg.drop_duplicates(
+        subset=["feature_name", "stage", "used_in_dataset", "role", "source_file", "source_table"]
+    ).sort_values(["stage", "role", "feature_name"])
+
+    meta_dir = out_dir / "metadata"
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    out_csv = meta_dir / "feature_registry.csv"
+    reg.to_csv(out_csv, index=False, encoding="utf-8-sig")
+    return FeatureRegistryArtifacts(csv=out_csv)
 
 
 def export_master_dataset(data_dir: Path, out_dir: Path) -> MasterArtifacts:
@@ -607,9 +985,10 @@ def export_demand_tables(data_dir: Path, out_dir: Path) -> DemandArtifacts:
     - demand_build_report.json
     """
     pd, _ = _require_pandas()
+    sources = get_source_catalog(data_dir)
 
-    # Mapping file (acts like 机构分类.xlsx in your description)
-    mapping_path = data_dir / "现券成交分机构统计20230401 - 20230630.xlsx"
+    # Fixed-role mapping file (acts like 机构分类.xlsx in your description)
+    mapping_path = sources.institution_category_mapping
     if not mapping_path.exists():
         raise FileNotFoundError(
             "Missing institution mapping source. Expected: data/现券成交分机构统计20230401 - 20230630.xlsx"
@@ -651,10 +1030,17 @@ def export_demand_tables(data_dir: Path, out_dir: Path) -> DemandArtifacts:
     files = sorted(data_dir.glob("现券成交分机构统计*.xlsx"))
     used_detailed_files: list[str] = []
     frames = []
-    category_fallback_path: Path | None = None
 
     for path in files:
-        if path.name == mapping_path.name or path.name == "现券成交分机构统计20230701 - 20230930.xlsx":
+        # Enforce single role per source file:
+        # - mapping file is mapping-only
+        # - funding indicators is funding-only (cleaned composite)
+        # - demand_by_category_fallback is a category-level composite (fallback-only)
+        if path.name in {
+            mapping_path.name,
+            sources.funding_indicators.name,
+            sources.demand_by_category_fallback.name,
+        }:
             continue
 
         try:
@@ -668,12 +1054,6 @@ def export_demand_tables(data_dir: Path, out_dir: Path) -> DemandArtifacts:
         except Exception:
             continue
         if df is None or df.empty:
-            continue
-
-        cols = {str(c) for c in df.columns}
-        if {"交易日期", "机构分类", "净买入交易量（亿元）"}.issubset(cols) and "机构类型" not in cols:
-            # This looks like an already category-level time series (not raw institutions).
-            category_fallback_path = path
             continue
 
         if "交易日期" not in df.columns or "净买入交易量（亿元）" not in df.columns or "机构类型" not in df.columns:
@@ -715,8 +1095,9 @@ def export_demand_tables(data_dir: Path, out_dir: Path) -> DemandArtifacts:
             detailed_wide[c] = 0.0
     detailed_wide = detailed_wide[["date", *cat_order]].fillna(0.0).sort_values("date").reset_index(drop=True)
 
-    # Optional fallback: category-level file to extend dates beyond detailed coverage.
+    # Optional fallback: fixed-role category-level composite file to extend dates beyond detailed coverage.
     fallback_wide = None
+    category_fallback_path = sources.demand_by_category_fallback if sources.demand_by_category_fallback.exists() else None
     if category_fallback_path is not None:
         df = pd.read_excel(category_fallback_path, sheet_name=0)
         tmp = df[["交易日期", "机构分类", "净买入交易量（亿元）"]].copy()
@@ -770,9 +1151,10 @@ def export_demand_tables(data_dir: Path, out_dir: Path) -> DemandArtifacts:
 
 def read_macro_day(data_dir: Path):
     pd, _ = _require_pandas()
-    path = data_dir / "高频宏观指标_day.xlsx"
+    sources = get_source_catalog(data_dir)
+    path = sources.macro_day
     if not path.exists():
-        path = data_dir / "高频宏观指标.xlsx"
+        path = sources.macro_day_fallback
     if not path.exists():
         logging.warning("Skip macro_day: file not found")
         return pd.DataFrame(columns=["date"])
@@ -801,7 +1183,8 @@ def read_macro_day(data_dir: Path):
 
 def read_macro_week(data_dir: Path):
     pd, _ = _require_pandas()
-    path = data_dir / "高频宏观指标_week.xlsx"
+    sources = get_source_catalog(data_dir)
+    path = sources.macro_week
     if not path.exists():
         logging.warning("Skip macro_week: file not found")
         return pd.DataFrame(columns=["date"])
@@ -831,7 +1214,17 @@ def read_macro_week(data_dir: Path):
 
 def read_trade_flows_7_10y(data_dir: Path):
     pd, _ = _require_pandas()
-    files = sorted(data_dir.glob("现券成交分机构统计*.xlsx"))
+    catalog = get_source_catalog(data_dir)
+    files = [
+        p
+        for p in sorted(data_dir.glob("现券成交分机构统计*.xlsx"))
+        if p.name
+        not in {
+            catalog.funding_indicators.name,
+            catalog.institution_category_mapping.name,
+            catalog.demand_by_category_fallback.name,
+        }
+    ]
     if not files:
         logging.warning("Skip trade_flows: no matching files")
         return pd.DataFrame(columns=["date"])
@@ -846,6 +1239,10 @@ def read_trade_flows_7_10y(data_dir: Path):
             logging.warning("Skip trade file %s: %s", path, exc)
             continue
         if df is None or df.empty:
+            continue
+        # Only accept files that look like the detailed trade table.
+        needed = {"交易日期", "债券类型", "净买入交易量（亿元）", "买入交易量（亿元）", "卖出交易量（亿元）"}
+        if not needed.issubset(set(df.columns)):
             continue
         frames.append(df)
 
@@ -972,3 +1369,103 @@ def write_dataset_artifacts(
         metadata_json=metadata_json,
         split_date=split_date,
     )
+
+
+def archive_dataset_if_horizon_mismatch(
+    out_dir: Path,
+    dataset_stem: str,
+    new_horizon_days: int,
+    *,
+    allowed_canonical_legacy_horizons: set[int] | None = None,
+    validation_dir: Path | None = None,
+) -> str | None:
+    """
+    Archive an existing dataset (full/train/val/metadata) if its recorded/inferred horizon differs.
+
+    Returns the archived stem name if an archive happened, otherwise None.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    meta_path = out_dir / f"{dataset_stem}_metadata.json"
+    full_path = out_dir / f"{dataset_stem}_full.csv"
+    if not meta_path.exists() and not full_path.exists():
+        return None
+
+    old_horizon: int | None = None
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            old_horizon_val = meta.get("horizon_days")
+            if isinstance(old_horizon_val, int):
+                old_horizon = old_horizon_val
+            elif isinstance(old_horizon_val, float) and old_horizon_val.is_integer():
+                old_horizon = int(old_horizon_val)
+        except Exception:
+            old_horizon = None
+
+    if old_horizon is None and full_path.exists():
+        try:
+            pd, _ = _require_pandas()
+            cols = list(pd.read_csv(full_path, nrows=0).columns)
+            import re
+
+            hs: set[int] = set()
+            for c in cols:
+                m = re.search(r"label__yield_10y__t\+(\d+)$", str(c))
+                if m:
+                    hs.add(int(m.group(1)))
+            if len(hs) == 1:
+                old_horizon = next(iter(hs))
+        except Exception:
+            old_horizon = None
+
+    if old_horizon is not None and int(old_horizon) == int(new_horizon_days):
+        return None
+
+    allowed_canonical_legacy_horizons = allowed_canonical_legacy_horizons or set()
+
+    # Canonical legacy naming: only one set per allowed horizon is permitted in the primary output dir.
+    legacy_stem = f"{dataset_stem}_legacy" if old_horizon is None else f"{dataset_stem}_legacy_t+{old_horizon}"
+
+    # If canonical legacy already exists, treat additional archives as spec-drift validation artifacts
+    # and move them out of the primary output directory.
+    legacy_full = out_dir / f"{legacy_stem}_full.csv"
+    drift_dir = (
+        validation_dir.resolve()
+        if validation_dir is not None
+        else (out_dir.parent / "experiments" / "validation" / "datasets").resolve()
+    )
+    drift_dir.mkdir(parents=True, exist_ok=True)
+
+    def unique_drift_stem(base: str) -> str:
+        from datetime import datetime, timezone
+
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        candidate = f"{base}_drift_{ts}"
+        i = 2
+        while (drift_dir / f"{candidate}_full.csv").exists() or (drift_dir / f"{candidate}_metadata.json").exists():
+            candidate = f"{base}_drift_{ts}_v{i}"
+            i += 1
+        return candidate
+
+    # Default: archive into validation area, unless this is an allowed canonical baseline horizon.
+    to_dir = drift_dir
+    to_stem = unique_drift_stem(legacy_stem)
+
+    if old_horizon is not None and int(old_horizon) in allowed_canonical_legacy_horizons and not legacy_full.exists():
+        to_dir = out_dir
+        to_stem = legacy_stem
+
+    for suffix in ["_full.csv", "_train.csv", "_val.csv", "_metadata.json"]:
+        src = out_dir / f"{dataset_stem}{suffix}"
+        if src.exists():
+            dst = to_dir / f"{to_stem}{suffix}"
+            src.rename(dst)
+
+    logging.warning(
+        "Archived existing dataset_stem=%s to %s/%s due to horizon mismatch (new t+%s).",
+        dataset_stem,
+        to_dir,
+        to_stem,
+        new_horizon_days,
+    )
+    return to_stem

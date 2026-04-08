@@ -1,0 +1,17 @@
+{
+  "generated_at_utc": "2026-04-08T09:16:03.718043+00:00",
+  "runs": [
+    {
+      "stage": "stage1_liquidity",
+      "report": "/workspaces/Bond-Yield-Prediction/outputs/baselines/stage1_liquidity/report.json"
+    },
+    {
+      "stage": "stage1_demand",
+      "report": "/workspaces/Bond-Yield-Prediction/outputs/baselines/stage1_demand/report.json"
+    },
+    {
+      "stage": "stage2_final_10y",
+      "report": "/workspaces/Bond-Yield-Prediction/outputs/baselines/stage2_final_10y/report.json"
+    }
+  ]
+}

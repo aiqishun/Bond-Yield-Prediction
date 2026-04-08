@@ -1,0 +1,30 @@
+{
+  "spec_version": 1,
+  "frozen_on_utc": "2026-04-08",
+  "mainline": {
+    "horizon_days": 20,
+    "stage1_definition": "stage1 component datasets label horizon = t+20",
+    "stage2_definition": "stage2 final yield dataset label horizon = t+20",
+    "stage2_dataset_stem": "modeling_dataset",
+    "stage2_stage_name": "stage2_final_10y"
+  },
+  "legacy": {
+    "purpose": "Baseline/legacy datasets kept for comparison only; not the mainline training target.",
+    "canonical_only": "Only one canonical legacy baseline is allowed per horizon in the primary output directory. Any duplicate versions produced by spec-drift validation must not remain under outputs/datasets/ (move to outputs/experiments/validation/).",
+    "allowed_canonical_horizons": [1],
+    "dataset_stem_prefix": "modeling_dataset_legacy",
+    "dataset_stem_template": "modeling_dataset_legacy_t+{horizon_days}",
+    "feature_registry_stage_template": "stage2_final_10y_legacy_t+{horizon_days}"
+  },
+  "feature_roles": {
+    "allowed_roles": [
+      "component_feature",
+      "component_target",
+      "target",
+      "lag_feature",
+      "macro_factor",
+      "direct_factor"
+    ],
+    "notes": "Role classification rules live in src/modeling_dataset.py::export_feature_registry(). Do not change roles without bumping spec_version."
+  }
+}

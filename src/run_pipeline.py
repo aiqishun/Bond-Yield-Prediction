@@ -73,6 +73,18 @@ def try_export_first_sheet_to_csv(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
+    # Keep defaults aligned with the frozen spec. The spec is loaded again in main()
+    # to validate runtime overrides.
+    try:
+        from pipeline_spec import load_pipeline_spec
+
+        spec = load_pipeline_spec(repo_root() / "pipeline_spec.json")
+        default_horizon_days = int(spec.mainline_horizon_days)
+        default_dataset_stem = str(spec.stage2_dataset_stem)
+    except Exception:
+        default_horizon_days = 20
+        default_dataset_stem = "modeling_dataset"
+
     parser = argparse.ArgumentParser(
         description="Run the project pipeline (input discovery + optional Excel export)."
     )
@@ -124,20 +136,41 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Export processed/master_dataset.csv by left-joining target + liquidity + demand + direct + macro.",
     )
     parser.add_argument(
+        "--export-component-datasets",
+        action="store_true",
+        help="Export stage1 component prediction datasets (liquidity/demand) with future labels.",
+    )
+    parser.add_argument(
+        "--export-feature-registry",
+        action="store_true",
+        help="Export outputs/metadata/feature_registry.csv describing column roles across stages.",
+    )
+    parser.add_argument(
         "--build-modeling-dataset",
         action="store_true",
         help="Build a modeling-ready dataset from Excel inputs (requires pandas+openpyxl).",
     )
     parser.add_argument(
         "--dataset-stem",
-        default="modeling_dataset",
+        default=default_dataset_stem,
         help="Output dataset name stem under outputs/datasets (default: modeling_dataset).",
     )
     parser.add_argument(
         "--horizon-days",
         type=int,
-        default=1,
-        help="Label horizon in days for yield forecasting (default: 1).",
+        default=default_horizon_days,
+        help="Label horizon in days for yield forecasting (default: frozen spec horizon).",
+    )
+    parser.add_argument(
+        "--spec-path",
+        type=Path,
+        default=repo_root() / "pipeline_spec.json",
+        help="Pipeline spec file to enforce frozen conventions (default: ./pipeline_spec.json).",
+    )
+    parser.add_argument(
+        "--allow-spec-drift",
+        action="store_true",
+        help="Allow running with settings that drift from the frozen spec (use intentionally).",
     )
     parser.add_argument(
         "--val-ratio",
@@ -172,6 +205,32 @@ def main(argv: list[str]) -> int:
     data_dir: Path = args.data_dir
     output_dir: Path = args.output_dir
 
+    spec = None
+    try:
+        from pipeline_spec import load_pipeline_spec
+
+        spec = load_pipeline_spec(Path(args.spec_path))
+    except Exception as exc:
+        logging.warning("Failed to load pipeline spec (%s). Spec enforcement disabled.", exc)
+
+    if spec is not None and not bool(args.allow_spec_drift):
+        if int(args.horizon_days) != int(spec.mainline_horizon_days):
+            logging.error(
+                "Frozen spec violation: --horizon-days=%s but spec mainline horizon_days=%s. "
+                "If you intend to diverge, rerun with --allow-spec-drift.",
+                args.horizon_days,
+                spec.mainline_horizon_days,
+            )
+            return 2
+        if str(args.dataset_stem) != str(spec.stage2_dataset_stem):
+            logging.error(
+                "Frozen spec violation: --dataset-stem=%s but spec stage2_dataset_stem=%s. "
+                "If you intend to diverge, rerun with --allow-spec-drift.",
+                args.dataset_stem,
+                spec.stage2_dataset_stem,
+            )
+            return 2
+
     if not data_dir.exists():
         logging.error("data-dir does not exist: %s", data_dir)
         return 2
@@ -202,7 +261,11 @@ def main(argv: list[str]) -> int:
 
     if args.build_modeling_dataset:
         try:
-            from modeling_dataset import build_modeling_dataset, write_dataset_artifacts
+            from modeling_dataset import (
+                archive_dataset_if_horizon_mismatch,
+                build_modeling_dataset,
+                write_dataset_artifacts,
+            )
         except Exception as exc:
             logging.error(
                 "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
@@ -216,6 +279,19 @@ def main(argv: list[str]) -> int:
             logging.error("Failed to build modeling dataset: %s", exc)
             return 6
 
+        # If you change horizon, the previous stage2 dataset becomes "legacy/baseline".
+        # Keep naming deterministic and compatible with pipeline_spec.json.
+        allowed_legacy = {1}
+        if spec is not None and spec.legacy_allowed_canonical_horizons:
+            allowed_legacy = set(spec.legacy_allowed_canonical_horizons)
+
+        archive_dataset_if_horizon_mismatch(
+            out_dir=output_dir / "datasets",
+            dataset_stem=str(args.dataset_stem),
+            new_horizon_days=int(args.horizon_days),
+            allowed_canonical_legacy_horizons=allowed_legacy,
+            validation_dir=output_dir / "experiments" / "validation" / "datasets",
+        )
         artifacts = write_dataset_artifacts(
             df=df,
             out_dir=output_dir / "datasets",
@@ -346,6 +422,54 @@ def main(argv: list[str]) -> int:
 
         logging.info("Wrote master dataset: %s", artifacts.csv)
         logging.info("Wrote master report: %s", artifacts.report_json)
+
+    if args.export_component_datasets:
+        try:
+            from modeling_dataset import export_component_datasets
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
+                exc,
+            )
+            return 19
+
+        try:
+            artifacts = export_component_datasets(
+                data_dir=data_dir,
+                out_dir=output_dir,
+                horizon_days=int(args.horizon_days),
+                val_ratio=float(args.val_ratio),
+                do_split=not bool(args.no_split),
+            )
+        except Exception as exc:
+            logging.error("Failed to export component datasets: %s", exc)
+            return 20
+
+        logging.info("Wrote stage1 liquidity dataset: %s", artifacts.liquidity_full)
+        logging.info("Wrote stage1 demand dataset: %s", artifacts.demand_full)
+        logging.info("Wrote stage1 report: %s", artifacts.report_json)
+
+    if args.export_feature_registry:
+        try:
+            from modeling_dataset import export_feature_registry
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas openpyxl",
+                exc,
+            )
+            return 21
+
+        try:
+            artifacts = export_feature_registry(
+                data_dir=data_dir,
+                out_dir=output_dir,
+                horizon_days=int(args.horizon_days),
+            )
+        except Exception as exc:
+            logging.error("Failed to export feature registry: %s", exc)
+            return 22
+
+        logging.info("Wrote feature registry: %s", artifacts.csv)
 
     return 0
 

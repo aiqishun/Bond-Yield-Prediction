@@ -1,0 +1,62 @@
+{
+  "dataset": "stage2_final_10y",
+  "train_csv": "/workspaces/Bond-Yield-Prediction/outputs/datasets/modeling_dataset_train.csv",
+  "val_csv": "/workspaces/Bond-Yield-Prediction/outputs/datasets/modeling_dataset_val.csv",
+  "n_train": 982,
+  "n_val": 246,
+  "n_features": 48,
+  "n_labels": 2,
+  "labels": [
+    "label__yield_10y__t+20",
+    "label__yield_10y_chg__t+20"
+  ],
+  "models": {
+    "elasticnet": {
+      "avg_metrics": {
+        "mae": 0.13405220428398953,
+        "rmse": 0.17167109906497857,
+        "r2": -0.12352275300043386
+      },
+      "per_label": {
+        "label__yield_10y__t+20": {
+          "metrics": {
+            "mae": 0.1647545184513509,
+            "rmse": 0.19983367472145655,
+            "r2": 0.04185822719748222
+          }
+        },
+        "label__yield_10y_chg__t+20": {
+          "metrics": {
+            "mae": 0.10334989011662818,
+            "rmse": 0.1435085234085006,
+            "r2": -0.28890373319834994
+          }
+        }
+      }
+    },
+    "xgboost": {
+      "avg_metrics": {
+        "mae": 0.2504027712207049,
+        "rmse": 0.29264095003927115,
+        "r2": -1.9924115680979677
+      },
+      "per_label": {
+        "label__yield_10y__t+20": {
+          "metrics": {
+            "mae": 0.39305420654731066,
+            "rmse": 0.44550196520664315,
+            "r2": -3.762025030284202
+          }
+        },
+        "label__yield_10y_chg__t+20": {
+          "metrics": {
+            "mae": 0.10775133589409919,
+            "rmse": 0.13977993487189916,
+            "r2": -0.2227981059117332
+          }
+        }
+      }
+    }
+  },
+  "generated_at_utc": "2026-04-08T09:16:22.828225+00:00"
+}
