@@ -6,6 +6,22 @@
 - `src/`: 代码
 - `outputs/`: 运行产物（默认输出目录）
 
+## outputs/ 目录说明（运行产物）
+
+`outputs/` 下既包含“过程表/中间表”，也包含“训练数据集、baseline 结果、可解释性图”等。常用子目录：
+
+- `outputs/targets/`：目标变量表（例如 `yield_10y.csv`）
+- `outputs/processed/`：合成后的主宽表与报告、Stage1 分量预测导出（例如 `master_dataset.csv`、`stage1_predictions.csv`）
+- `outputs/stage1/`：Stage1 分量建模用数据集（liquidity / demand 的 full/train/val 及报告）
+- `outputs/datasets/`：Stage2（最终 10Y）建模数据集（当前主线：`modeling_dataset_stage2_{full,train,val,metadata}.json/csv`）
+- `outputs/baselines/`：最小 baseline 训练产物（按 stage 分目录保存模型、预测、report；并有 `results_summary.csv` 汇总）
+- `outputs/interpretability/`：可解释性产物（SHAP 图、重要性表等；按 stage/model/label 组织）
+- `outputs/metadata/`：元信息与注册表（例如 `feature_registry.csv`）
+- `outputs/exported_csv/`：把 `data/*.xlsx` 的首个 sheet 导出为 CSV 的结果（用于调试/检查输入）
+- `outputs/experiments/validation/`：spec-drift 或验证实验的归档目录（避免与主线产物混放）
+
+此外，`outputs/` 根目录也会生成若干过程表与报告（如 `liquidity_features.csv`、`macro_features.csv`、`direct_factors.csv` 及对应 `*_report.json`），用于快速排查每一步清洗/对齐是否符合预期。
+
 ## 数据文件字典
 
 | 文件名（data/） | 关键字段（示例） | 频率 | 用途/备注 |
