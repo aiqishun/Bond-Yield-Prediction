@@ -94,8 +94,8 @@ def get_source_catalog(data_dir: Path) -> SourceCatalog:
         institution_category_mapping=data_dir / "现券成交分机构统计20230401 - 20230630.xlsx",
         # This file is a cleaned composite time series at category level (covers long range).
         demand_by_category_fallback=data_dir / "现券成交分机构统计20230101 - 20230331.xlsx",
-        # Despite its filename, this file contains LPR series in the current dataset.
-        lpr_table=data_dir / "债券发行与到期20250818国债及政金债.xlsx",
+        # Low-frequency LPR table (monthly).
+        lpr_table=data_dir / "lpr.xlsx",
         macro_day=data_dir / "高频宏观指标_day.xlsx",
         macro_day_fallback=data_dir / "高频宏观指标.xlsx",
         macro_week=data_dir / "高频宏观指标_week.xlsx",

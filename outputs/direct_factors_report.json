@@ -12,7 +12,7 @@
   ],
   "source_files_used": [
     "/workspaces/Bond-Yield-Prediction/data/现券成交分机构统计20230701 - 20230930.xlsx",
-    "/workspaces/Bond-Yield-Prediction/data/债券发行与到期20250818国债及政金债.xlsx",
+    "/workspaces/Bond-Yield-Prediction/data/lpr.xlsx",
     "data/高频宏观指标_day.xlsx (net financing proxy)"
   ],
   "missing_expected_fields": [
