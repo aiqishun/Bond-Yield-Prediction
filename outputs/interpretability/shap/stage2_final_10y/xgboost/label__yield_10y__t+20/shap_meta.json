@@ -1,0 +1,11 @@
+{
+  "label": "label__yield_10y__t+20",
+  "model_path": "/workspaces/Bond-Yield-Prediction/outputs/baselines/stage2_final_10y/models/xgboost/label__yield_10y__t+20.joblib",
+  "n_train_rows_used": 982,
+  "n_val_rows_used": 246,
+  "n_val_rows_shap": 246,
+  "n_features": 24,
+  "max_samples": 1000,
+  "seed": 42,
+  "generated_at_utc": "2026-04-12T13:20:45.183033+00:00"
+}

@@ -190,17 +190,26 @@
 
 输出文件（默认）：
 
-- `outputs/datasets/modeling_dataset_full.csv`
-- `outputs/datasets/modeling_dataset_train.csv`
-- `outputs/datasets/modeling_dataset_val.csv`
-- `outputs/datasets/modeling_dataset_metadata.json`
+- `outputs/datasets/modeling_dataset_stage2_full.csv`
+- `outputs/datasets/modeling_dataset_stage2_train.csv`
+- `outputs/datasets/modeling_dataset_stage2_val.csv`
+- `outputs/datasets/modeling_dataset_stage2_metadata.json`
 
 标签（label）与目标序列：
 
 - 目标序列来自 `data/资金与流动性.xlsx` 的 `中债国债到期收益率:10年`（列名会自动匹配包含“10年+收益率”的列）
 - 主线默认生成 `label__yield_10y__t+20`（预测 `t+20` 的 10 年期收益率）与 `label__yield_10y_chg__t+20`（预测变动）
-- baseline（legacy）仅保留一套 canonical：`outputs/datasets/modeling_dataset_legacy_t+1_*.csv`（用于对比；不作为主线训练目标）
+- 本仓库不再保留旧版本的 `outputs/datasets/modeling_dataset_*.csv`（避免同名多套口径并存造成误用）
 - spec-drift 验证产物（重复版本/其它 horizon）统一放到：`outputs/experiments/validation/datasets/`
+
+Stage1 分量预测（用 Stage1 的 XGBoost baseline 导出历史样本的 in-sample 预测）：
+
+`python src/export_stage1_predictions.py`
+
+输出：
+
+- `outputs/processed/stage1_predictions.csv`
+- `outputs/processed/stage1_predictions_report.json`
 
 特征（features）来源（按 `date` 对齐合并）：
 
@@ -248,3 +257,17 @@
 
 - `outputs/baselines/results_summary.csv`
 - `outputs/baselines/results_summary_metadata.json`
+
+## XGBoost 可解释性（SHAP）
+
+依赖（如未安装）：
+
+`python -m pip install shap matplotlib seaborn`
+
+生成 Stage2（最终 10Y）XGBoost 的 SHAP 图与特征重要性：
+
+`python src/shap_xgboost.py --stage stage2_final_10y`
+
+输出目录：
+
+- `outputs/interpretability/shap/stage2_final_10y/xgboost/`

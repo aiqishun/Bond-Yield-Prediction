@@ -1320,6 +1320,66 @@ def build_modeling_dataset(data_dir: Path, horizon_days: int) -> object:
     return df.reset_index(drop=True)
 
 
+def build_modeling_dataset_stage2(output_dir: Path, horizon_days: int) -> object:
+    """
+    Build a Stage2-only dataset that physically connects the two-layer architecture.
+
+    Inputs (CSV, produced by earlier steps):
+    - outputs/targets/yield_10y.csv: base target series (used for y + lag features)
+    - outputs/processed/stage1_predictions.csv: in-sample predictions from Stage1 models
+    - outputs/direct_factors.csv: direct low-frequency factors (LPR) + OMO, aligned daily
+
+    Output schema:
+    - Features (X): yield_10y, lag features, Stage1 predicted components, LPR/OMO
+    - Label (y): label__yield_10y__t+{horizon_days}
+    """
+    pd, _ = _require_pandas()
+
+    target_csv = output_dir / "targets" / "yield_10y.csv"
+    stage1_pred_csv = output_dir / "processed" / "stage1_predictions.csv"
+    direct_csv = output_dir / "direct_factors.csv"
+
+    missing = [str(p) for p in [target_csv, stage1_pred_csv, direct_csv] if not p.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "Missing required CSV inputs for stage2 dataset: " + ", ".join(missing)
+        )
+
+    target = pd.read_csv(target_csv)
+    stage1 = pd.read_csv(stage1_pred_csv)
+    direct = pd.read_csv(direct_csv)
+
+    for df in (target, stage1, direct):
+        if "date" not in df.columns:
+            raise ValueError("All inputs must contain a 'date' column")
+        df["date"] = _to_date(pd, df["date"])
+
+    # Keep only LPR + OMO columns from direct_factors.csv.
+    direct_cols = ["date"] + [
+        str(c)
+        for c in direct.columns
+        if str(c).startswith("lpr_") or str(c).startswith("omo_")
+    ]
+    direct = direct[direct_cols].copy()
+
+    df = (
+        target[["date", "yield_10y"]]
+        .merge(stage1, on="date", how="left")
+        .merge(direct, on="date", how="left")
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+
+    df["feat__yield_10y__lag1"] = df["yield_10y"].shift(1)
+    df["feat__yield_10y__lag5"] = df["yield_10y"].shift(5)
+
+    label_col = f"label__yield_10y__t+{horizon_days}"
+    df[label_col] = df["yield_10y"].shift(-horizon_days)
+
+    df = df.dropna(subset=[label_col, "feat__yield_10y__lag1"])
+    return df.reset_index(drop=True)
+
+
 def write_dataset_artifacts(
     df,
     out_dir: Path,

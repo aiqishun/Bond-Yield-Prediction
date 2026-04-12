@@ -1,0 +1,11 @@
+{
+  "label": "label__liquidity__dr007__t+20",
+  "model_path": "/workspaces/Bond-Yield-Prediction/outputs/baselines/stage1_liquidity/models/xgboost/label__liquidity__dr007__t+20.joblib",
+  "n_train_rows_used": 983,
+  "n_val_rows_used": 246,
+  "n_val_rows_shap": 246,
+  "n_features": 49,
+  "max_samples": 1000,
+  "seed": 42,
+  "generated_at_utc": "2026-04-12T13:00:44.157020+00:00"
+}

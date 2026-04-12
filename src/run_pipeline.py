@@ -151,6 +151,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Build a modeling-ready dataset from Excel inputs (requires pandas+openpyxl).",
     )
     parser.add_argument(
+        "--build-stage2-dataset",
+        action="store_true",
+        help="Build a Stage2-only dataset by merging Stage1 predictions + direct factors + yield lags (requires pandas).",
+    )
+    parser.add_argument(
         "--dataset-stem",
         default=default_dataset_stem,
         help="Output dataset name stem under outputs/datasets (default: modeling_dataset).",
@@ -303,6 +308,34 @@ def main(argv: list[str]) -> int:
         logging.info("Wrote dataset: %s", artifacts.full_csv)
         if artifacts.train_csv and artifacts.val_csv:
             logging.info("Wrote split: %s (train) / %s (val)", artifacts.train_csv, artifacts.val_csv)
+
+    if args.build_stage2_dataset:
+        try:
+            from modeling_dataset import build_modeling_dataset_stage2, write_dataset_artifacts
+        except Exception as exc:
+            logging.error(
+                "Missing dependency or import error (%s). Install with: python3 -m pip install pandas",
+                exc,
+            )
+            return 6
+
+        try:
+            df = build_modeling_dataset_stage2(output_dir=output_dir, horizon_days=int(args.horizon_days))
+        except Exception as exc:
+            logging.error("Failed to build Stage2 dataset: %s", exc)
+            return 6
+
+        artifacts = write_dataset_artifacts(
+            df=df,
+            out_dir=output_dir / "datasets",
+            dataset_stem="modeling_dataset_stage2",
+            val_ratio=float(args.val_ratio),
+            do_split=True,
+            horizon_days=int(args.horizon_days),
+        )
+        logging.info("Wrote Stage2 dataset: %s", artifacts.full_csv)
+        if artifacts.train_csv and artifacts.val_csv:
+            logging.info("Wrote Stage2 split: %s (train) / %s (val)", artifacts.train_csv, artifacts.val_csv)
 
     if args.export_target_table:
         try:

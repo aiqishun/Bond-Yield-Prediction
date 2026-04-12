@@ -1,0 +1,49 @@
+{
+  "out_csv": "/workspaces/Bond-Yield-Prediction/outputs/processed/stage1_predictions.csv",
+  "rows": 1229,
+  "cols": 17,
+  "generated_at_utc": "2026-04-12T13:15:55.414362+00:00",
+  "stages": {
+    "stage1_liquidity": {
+      "stage": "stage1_liquidity",
+      "train_csv": "/workspaces/Bond-Yield-Prediction/outputs/stage1/liquidity_component_dataset_train.csv",
+      "val_csv": "/workspaces/Bond-Yield-Prediction/outputs/stage1/liquidity_component_dataset_val.csv",
+      "model_dir": "/workspaces/Bond-Yield-Prediction/outputs/baselines/stage1_liquidity/models/xgboost",
+      "n_train": 983,
+      "n_val": 246,
+      "n_features_used": 49,
+      "n_labels": 10,
+      "prediction_columns": [
+        "stage1_pred__liquidity__dr001__t+20",
+        "stage1_pred__liquidity__dr007__t+20",
+        "stage1_pred__liquidity__r001__t+20",
+        "stage1_pred__liquidity__r007__t+20",
+        "stage1_pred__liquidity__fr007__t+20",
+        "stage1_pred__liquidity__gc001__t+20",
+        "stage1_pred__liquidity__gc007__t+20",
+        "stage1_pred__liquidity__spread_r007_dr007__t+20",
+        "stage1_pred__liquidity__spread_gc007_r007__t+20",
+        "stage1_pred__liquidity__spread_fr007_r007__t+20"
+      ]
+    },
+    "stage1_demand": {
+      "stage": "stage1_demand",
+      "train_csv": "/workspaces/Bond-Yield-Prediction/outputs/stage1/demand_component_dataset_train.csv",
+      "val_csv": "/workspaces/Bond-Yield-Prediction/outputs/stage1/demand_component_dataset_val.csv",
+      "model_dir": "/workspaces/Bond-Yield-Prediction/outputs/baselines/stage1_demand/models/xgboost",
+      "n_train": 983,
+      "n_val": 246,
+      "n_features_used": 45,
+      "n_labels": 6,
+      "prediction_columns": [
+        "stage1_pred__demand__银行__t+20",
+        "stage1_pred__demand__基金__t+20",
+        "stage1_pred__demand__保险__t+20",
+        "stage1_pred__demand__券商__t+20",
+        "stage1_pred__demand__理财子__t+20",
+        "stage1_pred__demand__其他__t+20"
+      ]
+    }
+  },
+  "note": "In-sample predictions computed from Stage1 XGBoost models on their train+val splits (stitched by date)."
+}

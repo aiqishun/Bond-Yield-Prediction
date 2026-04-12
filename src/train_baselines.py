@@ -66,6 +66,11 @@ def default_stage1_demand_paths(outputs_dir: Path) -> SplitPaths:
 
 
 def default_stage2_final_10y_paths(outputs_dir: Path) -> SplitPaths:
+    # Prefer the Stage2-only dataset (Stage1 preds + direct factors + yield lags) if present.
+    stage2_train = outputs_dir / "datasets" / "modeling_dataset_stage2_train.csv"
+    stage2_val = outputs_dir / "datasets" / "modeling_dataset_stage2_val.csv"
+    if stage2_train.exists() and stage2_val.exists():
+        return SplitPaths(train_csv=stage2_train, val_csv=stage2_val)
     return SplitPaths(
         train_csv=outputs_dir / "datasets" / "modeling_dataset_train.csv",
         val_csv=outputs_dir / "datasets" / "modeling_dataset_val.csv",
